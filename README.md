@@ -9,7 +9,7 @@ started billing cannot stay invisible.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-43%20passed-brightgreen)
+[![Tests](https://img.shields.io/badge/tests-43%20passed-brightgreen)](.github/workflows/tests.yml)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 
 ![TTS Voice Pool Banner](./site/banner.svg)
