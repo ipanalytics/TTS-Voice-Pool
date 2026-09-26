@@ -4,57 +4,56 @@ _Русская версия: [README.ru.md](README.ru.md)_
 
 **Speak through several TTS providers from one call.** Keys rotate when one is rate-limited,
 a designed voice falls back to a prebuilt one when it expires, the pace is capped at a rate a
-human can actually listen to, and every synthesis is priced in a ledger so a free tier that
+human can listen to, and every synthesis is priced in a ledger so a free tier that
 started billing cannot stay invisible.
 
-![license](https://img.shields.io/badge/license-MIT-blue)
-![python](https://img.shields.io/badge/python-3.11%2B-blue)
-![tests](https://img.shields.io/badge/tests-43%20passed-brightgreen)
-![dependencies](https://img.shields.io/badge/runtime%20deps-none-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Tests](https://img.shields.io/badge/tests-43%20passed-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 
-```sh
-tts-voice-pool --say "Good morning. Three things on today's list." briefing.ogg
-# voiced by gemini-2.5-flash-preview-tts with key main -> briefing.ogg (6.4s)
+![TTS Voice Pool Banner](./site/banner.svg)
+
+## Overview
+
+I run a scheduled assistant that speaks on a daily basis — briefings, alerts, reminders. A scheduled job has nobody to ask when the voice fails, so every failure that used to need a human decision became a decision the code makes on its own. This package handles key rotation, voice fallback, pace control, and cost tracking.
+
+## Architecture
+
+The pool implements several mechanisms to ensure reliable speech synthesis:
+
+- **Key rotation with memory**: Each key has state tracking when it last worked, when it's resting after a 429 error, and whether it's permanently dead. Keys are tried in order of recent success, so a healthy pool converges on one working key instead of cycling.
+
+- **Cooldown management**: After a 429 rate-limit error, keys rest for 5 minutes instead of being hammered immediately or blacklisted for too long. Resting keys are moved to the end of the queue but still attempted if all keys are resting.
+
+- **Model chain fallback**: Models are configured in a chain (default: `gemini-2.5-flash-preview-tts`) so if one fails, the system tries the next one. The chain is defined in a one-line file making rollbacks trivial.
+
+- **Voice fallback mechanism**: Designed voices that fail for reasons other than quota/dead errors are retried once with a prebuilt fallback voice. Quota errors are not masked by retrying.
+
+- **Cost tracking and budget enforcement**: Every successful synthesis is logged with character count, duration, tokens used, and theoretical cost. A monthly budget cap prevents unexpected charges — once the cap is reached, subsequent calls go to the free fallback engine.
+
+- **Pace control**: Articulation is measured as characters divided by (total seconds minus detected silence). If above the ceiling (default 12.3 chars/s), audio is stretched with `atempo` to meet the limit, with a minimum stretch factor of 0.72 to avoid audible distortion.
+
+## Features
+
+- CLI interface: `--check`, `--say`, `--say-file`, `--usage`
+- Library interface: `from tts_voice_pool import say`
+- Key pool with persistent state
+- Model chain configuration
+- Pace limiting with audio stretching
+- Cost ledger with monthly reporting
+- Free fallback via edge-tts
+- Proper exit codes for cron jobs
+
+## Quick Start
+
+```bash
+pip install -e ".[edge]"
 ```
 
----
+## Installation
 
-## Why this exists
-
-This is the voice layer of an assistant that speaks on a schedule — a daily briefing, an alert,
-a reminder. A scheduled job has nobody to ask when the voice fails, so every failure that used
-to need a human decision had to become a decision the code makes on its own:
-
-* a key that hits its quota at 03:10, with nobody awake to replace it;
-* a designed voice that quietly expired, so the episode either loses its voice or gets a
-  different one — and the listener notices the second option more than the code does;
-* a take that is technically fine and still unpleasant, because 12 characters per second
-  averaged over a long text can mean 17 characters per second inside the sentences;
-* a free tier that starts billing, which looks exactly like a free tier that does not.
-
-Each of those now has a decision, a test, and a paragraph here explaining what was measured.
-The numbers in this README come from that production use, not from a synthetic benchmark.
-
-## What you get
-
-* **`tts-voice-pool` CLI** — `--check`, `--say`, `--say-file`, `--usage`, and exit codes a cron
-  job can branch on.
-* **A library** — `from tts_voice_pool import say`; provider failures return a code instead of
-  raising, because the caller is usually a job that would rather send text than crash.
-* **A key pool with memory** — per-key state in one JSON file: who worked last, who is resting
-  after a 429, who is dead until a human replaces the key.
-* **A model chain** — declared in a one-line file, so rolling back to the previous model is a
-  text edit instead of a deployment.
-* **A pace model** — articulation measured with `ffmpeg silencedetect`, capped by `atempo`,
-  never stretched below the audible floor.
-* **A cost ledger and a hard monthly cap** — after the cap the next call goes to the free
-  engine, not to the paid API.
-* **A free fallback** — `edge-tts` in a subprocess; a broken key costs a different voice, never
-  a silent episode.
-
-## Install
-
-```sh
+```bash
 git clone https://github.com/ipanalytics/TTS-Voice-Pool
 cd TTS-Voice-Pool
 python -m pip install -e ".[edge]"     # edge-tts is the optional free fallback
@@ -63,59 +62,35 @@ python -m pip install -e ".[edge]"     # edge-tts is the optional free fallback
 `ffmpeg` and `ffprobe` must be on `PATH`: they measure the pace and encode the container. No
 other runtime dependency — the HTTP calls use the standard library.
 
-## The key file
+## Usage
 
-One key per line: a label, `=`, the key. A bare line is both label and key; `#` is a comment.
+```bash
+# Basic usage
+tts-voice-pool --say "Good morning. Three things on today's list." briefing.ogg
 
-```text
-main=AIza...
-backup=AIza...
-# laptop=AIza...
+# Check available keys
+tts-voice-pool --check
+
+# View usage statistics
+tts-voice-pool --usage
+
+# Process text from a file
+tts-voice-pool --say-file input.txt output.mp3
 ```
 
-Read from, in order: `GEMINI_API_KEYS` (`main=...,backup=...`), `TTS_POOL_KEYS_FILE`, then
-`$TTS_POOL_HOME/.gemini_tts_keys` (falling back to `$HERMES_HOME`). Keys are read on every call
-and never written into the state file, so the two files can have different permissions.
+## Outputs/artifacts
 
-## How a call is made
+The system creates several output files:
 
-1. **Budget first.** If the monthly cap is already spent, the call goes straight to the free
-   engine. A paid provider is not called to discover that it is not allowed.
-2. **Keys in order of recent success.** The key that answered last is tried first, so a healthy
-   pool converges on one working key instead of cycling.
-3. **Resting keys are skipped, not forgotten.** A key inside its cooldown is moved to the end —
-   if every key is resting, the call is still attempted, because a cooldown is a hint.
-4. **Models in the configured chain.** A model-level failure moves to the next model; a
-   `quota`/`dead` answer stops the loop for that key immediately.
-5. **Voice fallback, only where it belongs.** A designed voice that fails with anything other
-   than quota/dead is retried once with a prebuilt voice. A quota error is the key's fault and
-   is not masked by a second attempt.
-6. **Pace, then encode.** The incoming bytes are detected (raw PCM or an already-finished WAV),
-   measured, stretched if needed, and encoded to the container the caller asked for.
-7. **Ledger.** One JSON line per success: key, voice, model, characters, seconds, tokens, and
-   what it would have cost in the paid tier.
-
-## The pace model
-
-Averaging characters over the whole file hides the problem. Measured on this project: a long
-episode that looked calm at 12.3 chars/s averaged over the text was being read at 16–17 chars
-per second inside the sentences — and that is the part a listener calls "too fast".
-
-So the pool measures speech only:
-
-```text
-articulation = characters / (total seconds - detected silence)     # -35 dB, 0.35 s
-```
-
-If `articulation` is above the ceiling, the take is stretched with `atempo` by
-`ceiling / articulation`, floored at 0.72 (deeper and the stretching becomes audible). The
-duration written to the ledger is the duration of the **delivered** file, measured after the
-stretch — a report built on the pre-stretch number drifts.
+- Audio files in the requested format (ogg, mp3, wav, etc.)
+- `~/.hermes/data/tts_pool_state.json` - key states with last success, cooldowns, etc.
+- `~/.hermes/data/tts_pool_usage.jsonl` - line-delimited JSON logs of each synthesis
+- Temporary processing files that are cleaned up after processing
 
 ## Configuration
 
 | Setting | Environment | File (in `$TTS_POOL_HOME/data`) | Default |
-| --- | --- | --- | --- |
+|---------|-------------|---------------------------------|---------|
 | Base directory | `TTS_POOL_HOME`, then `HERMES_HOME` | — | `~/.hermes` |
 | Key pool | `GEMINI_API_KEYS`, `TTS_POOL_KEYS_FILE` | `.gemini_tts_keys` | empty |
 | Default voice | `TTS_POOL_VOICE` | `tts_pool_voice.txt` | `Kore` |
@@ -127,25 +102,54 @@ stretch — a report built on the pre-stretch number drifts.
 | Free fallback voice | `TTS_POOL_EDGE_VOICE` | — | `ru-RU-SvetlanaNeural` |
 | Request timeout, s | `TTS_POOL_TIMEOUT` | — | `90` |
 
-Delivery notes are never glued into the text by default. A measured example from this project:
-74 characters of transcript plus notes came back as ~200 characters of speech, because the model
-read the notes aloud — so notes travel as a separate field, and `TTS_POOL_PREPEND_STYLE=1`
-restores the old behaviour for anyone who wants it.
+## Operational notes
 
-## Troubleshooting
+- API keys are read on every call and never written to state files, allowing different permission schemes
+- Cooldown period after 429 errors is 300 seconds (5 minutes)
+- Designed voices that expire fall back to prebuilt voices automatically
+- Audio pace is measured excluding detected silence (-35 dB threshold, 0.35s minimum)
+- Minimum stretch factor is 0.72 to prevent audible distortion from excessive slowing
+- Free fallback engine (edge-tts) ensures no silent episodes when all paid keys fail
 
-| Symptom | Usual cause | What the pool does |
-| --- | --- | --- |
-| `voice pool is empty` and exit code 2 | No key file and no `GEMINI_API_KEYS` | Nothing to try; the caller should fall back to text |
-| Silence every night at the same hour | Quota resets while the job runs | The key rests and the next one speaks |
-| The voice changed and back again | One key is rate-limited, another is not | Expected: `--usage` shows which key and which model answered |
-| Speech sounds rushed | A model returned a fast take | Stretched to the ceiling, min 0.72 |
-| Nothing is billed, ever | The free engine answered every call | `--usage` shows the `edge` rows explicitly |
-| `ffmpeg failed` | Missing `ffmpeg`/`ffprobe` | The call fails loudly rather than shipping a broken file |
+## Project scope
+
+This package provides a small layer between "I have several keys and a text" and "a playable file came out", with failure paths written down and a free fallback that keeps scheduled jobs from going silent. It is not a streaming synthesizer, not a local model runner, not a voice cloner.
+
+## Use cases
+
+- Scheduled voice briefings and notifications
+- Automated podcast generation
+- Voice alerts for monitoring systems
+- Any application requiring reliable TTS with fallback mechanisms
+- Cost-controlled speech synthesis with budget enforcement
+
+## Limitations
+
+- Only supports Gemini API for paid TTS and edge-tts for free fallback
+- Requires ffmpeg/ffprobe to be installed separately
+- No streaming synthesis - files are generated entirely before delivery
+- Designed voice expiration detection is limited to failure patterns
+- Budget enforcement relies on accurate cost estimation rather than actual billing data
+
+## Repository layout
+
+```
+tts_voice_pool/
+├── __init__.py       # Main entry point and public API
+├── pool.py          # Key rotation and state management
+├── speech.py        # TTS provider communication and synthesis
+├── config.py        # Configuration handling and defaults
+├── ledger.py        # Usage tracking and cost calculation
+└── audio.py         # Audio processing and pace control
+tests/
+├── test_pool.py     # Key pool functionality tests
+├── test_speech.py   # Speech synthesis tests
+└── test_audio.py    # Audio processing tests
+```
 
 ## Testing
 
-```sh
+```bash
 python -m pytest -q      # 43 passed
 python -m ruff check .   # clean
 ```
@@ -155,19 +159,19 @@ against known numbers, and every test gets its own `$TTS_POOL_HOME`, so a test r
 a real ledger or a real key file. What the tests do **not** prove is that a given key still
 works — that is exactly what `--check` is for.
 
-## What this is not
+## Deployment
 
-Not a streaming synthesiser, not a local model runner, not a voice cloner. It is the small layer
-between "I have several keys and a text" and "a playable file came out", with the failure paths
-written down — and the free fallback that keeps a scheduled job from going silent.
-
-## Related
-
-* [Hermes-Agent-Ops](https://github.com/ipanalytics/Hermes-Agent-Ops) — running this assistant
-  in production: cron hygiene, context budgets, cost governance.
-* [Hermes-Plugin-Pack](https://github.com/ipanalytics/Hermes-Plugin-Pack) — the plugins that
-  wrap the same assistant.
+For production use, ensure:
+- ffmpeg and ffprobe are available in PATH
+- API keys are properly secured
+- Budget limits are set appropriately
+- Cron jobs use proper exit code handling
+- State and usage files have appropriate permissions
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Disclaimer
+
+This package is designed for reliable speech synthesis with fallback mechanisms. I monitor costs and usage carefully to prevent unexpected charges. Use at your own risk and always set appropriate budget limits.

@@ -1,0 +1,26 @@
+<svg width="1600" height="400" viewBox="0 0 1600 400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="400" fill="#0f0f0f"/>
+  
+  <!-- Accent grid lines -->
+  <defs>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#2a2a2a" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="400" fill="url(#grid)" />
+  
+  <!-- Main title -->
+  <text x="800" y="180" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" 
+        font-size="64" fill="#e0e0e0" letter-spacing="2">
+    TTS VOICE POOL
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="800" y="250" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" 
+        font-size="28" fill="#a0a0a0" letter-spacing="1">
+    Multiple TTS providers with key rotation, cost tracking, and fallback
+  </text>
+  
+  <!-- Accent line -->
+  <rect x="400" y="300" width="800" height="4" fill="#3b82f6"/>
+</svg>
