@@ -1,0 +1,44 @@
+[project]
+name = "tts-voice-pool"
+version = "1.0.0"
+description = "Speak through several TTS providers from one call: key rotation, voice fallback, a pace a human can bear, and a notional cost ledger"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "ipanalytics" }]
+keywords = ["tts", "text-to-speech", "gemini", "edge-tts", "voice", "telegram", "fallback"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+  "Intended Audience :: Developers",
+]
+dependencies = []
+
+[project.optional-dependencies]
+edge = ["edge-tts>=6.1"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+tts-voice-pool = "tts_voice_pool.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ipanalytics/TTS-Voice-Pool"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tts_voice_pool"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
