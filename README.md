@@ -2,7 +2,7 @@
 
 _Русская версия: [README.ru.md](README.ru.md)_
 
-**Speak through several TTS providers from one call.** Keys rotate when one is rate-limited,
+**Speak through several TTS providers from one call — for AI agents (Hermes Agent, Telegram bots).** Keys rotate when one is rate-limited,
 a designed voice falls back to a prebuilt one when it expires, the pace is capped at a rate a
 human can listen to, and every synthesis is priced in a ledger so a free tier that
 started billing cannot stay invisible.
